@@ -10,7 +10,7 @@ import { extractText, heuristicParse } from '../src/lib/resumeText.js';
 import { applyMapping, guessField, normalise, CANONICAL_FIELDS } from '../src/lib/normalise.js';
 import { matchScore } from '../src/lib/matching.js';
 import { buildIcs } from '../src/lib/ics.js';
-import { callProvider, parseJsonLoose } from '../src/modules/ai/providers.js';
+import { callProvider, parseJsonLoose, parseAzure } from '../src/modules/ai/providers.js';
 import { merge, resolve, fromLegacy } from '../src/modules/ai/settings.js';
 import { render, textToHtml, BUILT_IN_TEMPLATES } from '../src/lib/template.js';
 
@@ -161,8 +161,54 @@ async function aiProviders() {
 
     reply({ choices: [{ message: { content: 'OK' } }] });
     out = await callProvider({ provider: 'azure', apiKey: 'az', azureEndpoint: 'https://x.openai.azure.com/', azureDeployment: 'gpt-4o' }, 's', 'u', false);
-    ok('Azure OpenAI: deployment URL and api-key header', last!.url === 'https://x.openai.azure.com/openai/deployments/gpt-4o/chat/completions?api-version=2024-10-21' && last!.init.headers['api-key'] === 'az' && out === 'OK', last!.url);
+    ok('Azure (Foundry): v1 API with deployment as model and api-key header', last!.url === 'https://x.openai.azure.com/openai/v1/chat/completions' && JSON.parse(last!.init.body).model === 'gpt-4o' && last!.init.headers['api-key'] === 'az' && out === 'OK', last!.url);
+  } finally { (globalThis as any).fetch = real; }
+}
 
+async function azureFoundry() {
+  section('Azure OpenAI / Microsoft Foundry endpoints');
+  const t = (e: string, d?: string, v?: string) => parseAzure(e, d, v);
+  let x = t('https://hr-ai.openai.azure.com/openai/deployments/gpt-4o-mini/chat/completions?api-version=2025-01-01-preview');
+  ok('full Target URI → deployment + api-version read from it', x.mode === 'deployments' && x.deployment === 'gpt-4o-mini' && x.apiVersion === '2025-01-01-preview' && x.base === 'https://hr-ai.openai.azure.com', x);
+  x = t('https://hr-ai.services.ai.azure.com/api/projects/hrms-proj', 'gpt-4.1');
+  ok('Foundry project endpoint → resource …openai.azure.com', x.base === 'https://hr-ai.openai.azure.com' && x.mode === 'auto', x);
+  x = t('hr-ai.cognitiveservices.azure.com', 'gpt-4o');
+  ok('cognitiveservices endpoint without https:// accepted', x.base === 'https://hr-ai.cognitiveservices.azure.com' && x.mode === 'auto', x);
+  x = t('https://hr-ai.openai.azure.com/openai/v1/', 'gpt-5-mini');
+  ok('v1 endpoint', x.mode === 'v1' && x.deployment === 'gpt-5-mini', x);
+  x = t('https://hr-ai.services.ai.azure.com/models', 'DeepSeek-V3');
+  ok('Foundry Models (non-OpenAI models) endpoint', x.mode === 'models' && x.base === 'https://hr-ai.services.ai.azure.com/models' && x.apiVersion === '2024-05-01-preview', x);
+
+  const real = globalThis.fetch; const calls: { url: string; body: any }[] = [];
+  const queue: [number, unknown][] = [];
+  (globalThis as any).fetch = async (url: string, init: any) => { calls.push({ url, body: JSON.parse(init.body) }); const [st, b] = queue.shift() ?? [200, { choices: [{ message: { content: 'OK' } }] }]; return new Response(JSON.stringify(b), { status: st }); };
+  try {
+    queue.push([400, { error: { message: "Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead." } }],
+      [400, { error: { message: "Unsupported value: 'temperature' does not support 0.2 with this model. Only the default (1) value is supported." } }]);
+    const out = await callProvider({ provider: 'azure', apiKey: 'k', azureEndpoint: 'https://r.openai.azure.com', azureDeployment: 'gpt-5-mini' }, 's', 'u', true);
+    const lastBody = calls[calls.length - 1].body;
+    ok('GPT-5 / o-series: switches to max_completion_tokens and drops temperature automatically', out === 'OK' && calls.length === 3 && lastBody.max_completion_tokens === 4000 && !('max_tokens' in lastBody) && !('temperature' in lastBody), calls.map((c) => Object.keys(c.body)));
+    calls.length = 0;
+    queue.push([404, { error: { code: '404', message: 'Resource not found' } }]);
+    await callProvider({ provider: 'azure', apiKey: 'k', azureEndpoint: 'https://old.openai.azure.com', azureDeployment: 'gpt-4o' }, 's', 'u', false);
+    ok('older resource without v1 API → falls back to versioned deployments URL', calls.length === 2 && calls[1].url === 'https://old.openai.azure.com/openai/deployments/gpt-4o/chat/completions?api-version=2024-10-21', calls.map((c) => c.url));
+    calls.length = 0;
+    queue.push([401, { error: { code: '401', message: 'Access denied due to invalid subscription key or wrong API endpoint.' } }]);
+    try { await callProvider({ provider: 'azure', apiKey: 'bad', azureEndpoint: 'https://r.openai.azure.com', azureDeployment: 'gpt-4o' }, 's', 'u', false); ok('401 → error', false); }
+    catch (e: any) { ok('wrong key → tells you to copy key and endpoint from the same resource', /SAME resource/.test(e.message), e.message); }
+    queue.push([404, { error: { code: 'DeploymentNotFound', message: 'The API deployment for this resource does not exist.' } }], [404, { error: { code: 'DeploymentNotFound', message: 'The API deployment for this resource does not exist.' } }]);
+    try { await callProvider({ provider: 'azure', apiKey: 'k', azureEndpoint: 'https://r.openai.azure.com', azureDeployment: 'gpt4o' }, 's', 'u', false); ok('404 → error', false); }
+    catch (e: any) { ok('wrong deployment name → explains deployment vs model name', /DEPLOYMENT name/.test(e.message), e.message); }
+    try { await callProvider({ provider: 'openai', apiKey: 'k', baseUrl: 'https://r.openai.azure.com/openai/v1' }, 's', 'u', false); ok('azure url in openai card → error', false); }
+    catch (e: any) { ok('Foundry address pasted into the OpenAI card → told to use Azure card', /Azure OpenAI" card/.test(e.message), e.message); }
+  } finally { (globalThis as any).fetch = real; }
+}
+
+async function aiProvidersRest() {
+  const real = globalThis.fetch;
+  let last: { url: string; init: any } | null = null;
+  const reply = (body: unknown, status = 200) => { (globalThis as any).fetch = async (url: string, init: any) => { last = { url, init }; return new Response(JSON.stringify(body), { status }); }; };
+  try {
     reply({ error: { message: 'Incorrect API key provided' } }, 401);
     try { await callProvider({ provider: 'openai', apiKey: 'bad' }, 's', 'u', false); ok('bad key → error', false); }
     catch (e: any) { ok('bad key → clear error with hint', /401.*Incorrect API key.*check the API key/.test(e.message), e.message); }
@@ -192,6 +238,8 @@ function aiRouting() {
 
 await resumes();
 await aiProviders();
+await azureFoundry();
+await aiProvidersRest();
 aiRouting();
 await template();
 await spreadsheet();

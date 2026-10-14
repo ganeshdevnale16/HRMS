@@ -25,7 +25,7 @@ export interface AiSettings {
   providers: Partial<Record<RealProvider, ProviderCreds & { source?: 'database' | 'environment' }>>;
 }
 
-export const isConfigured = (p: RealProvider, c?: ProviderCreds) => !!c?.apiKey && (p !== 'azure' || (!!c.azureEndpoint && !!c.azureDeployment));
+export const isConfigured = (p: RealProvider, c?: ProviderCreds) => !!c?.apiKey && (p !== 'azure' || (!!c.azureEndpoint && (!!c.azureDeployment || /\/openai\/deployments\//.test(c.azureEndpoint))));
 
 /** Old single-provider setting → new shape. */
 export function fromLegacy(old: AiConfig): AiSettings {
