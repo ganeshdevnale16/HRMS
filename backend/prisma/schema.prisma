@@ -1,0 +1,374 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  RECRUITER
+  INTERVIEWER
+  FINANCE
+  VIEWER
+}
+
+enum Stage {
+  SOURCED
+  SCREENING
+  COMMUNICATION
+  INTERVIEW
+  SELECTION
+  HIRING
+  BGV
+  JOINING
+  BILLING
+}
+
+enum CandidateStatus {
+  ACTIVE
+  HOLD
+  REJECTED
+}
+
+enum Priority {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum WorkMode {
+  HYBRID
+  ONSITE
+  REMOTE
+}
+
+enum MeetingProviderId {
+  TEAMS
+  ZOOM
+  GOOGLE_MEET
+  WEBEX
+  JITSI
+  IN_PERSON
+  PHONE
+}
+
+enum CalendarProviderId {
+  OUTLOOK
+  GOOGLE
+  NONE
+}
+
+enum InterviewStatus {
+  SCHEDULED
+  CONFIRMED
+  COMPLETED
+  NO_SHOW
+  CANCELLED
+}
+
+enum SourceStatus {
+  ACTIVE
+  PAUSED
+  ERROR
+}
+
+model User {
+  id           String        @id @default(cuid())
+  email        String        @unique
+  name         String
+  passwordHash String
+  role         Role          @default(RECRUITER)
+  active       Boolean       @default(true)
+  createdAt    DateTime      @default(now())
+  interviewer  Interviewer?
+  requirements Requirement[] @relation("RecruiterReqs")
+}
+
+model Requirement {
+  id          String      @id @default(cuid())
+  code        String      @unique
+  client      String
+  position    String
+  openings    Int
+  expMin      Float
+  expMax      Float
+  skills      String[]
+  location    String
+  workMode    WorkMode
+  ctcMin      Float
+  ctcMax      Float
+  noticeMax   Int
+  priority    Priority    @default(MEDIUM)
+  recruiterId String?
+  recruiter   User?       @relation("RecruiterReqs", fields: [recruiterId], references: [id])
+  targetDate  DateTime?
+  status      String      @default("OPEN")
+  description String?
+  createdAt   DateTime    @default(now())
+  candidates  Candidate[]
+  interviews  Interview[]
+}
+
+model Candidate {
+  id             String            @id @default(cuid())
+  name           String
+  email          String?
+  phone          String?
+  location       String?
+  expYears       Float             @default(0)
+  skills         String[]
+  company        String?
+  title          String?
+  currentCtc     Float?
+  expectedCtc    Float?
+  noticeDays     Int?
+  education      String?
+  workMode       String?
+  resumeUrl      String?
+  resumeFileId   String?
+  resumeText     String?
+  requirementId  String?
+  requirement    Requirement?      @relation(fields: [requirementId], references: [id])
+  stage          Stage             @default(SOURCED)
+  status         CandidateStatus   @default(ACTIVE)
+  ownerId        String?
+  aiScreening    Json?
+  aiQuestions    Json?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  sources        CandidateSource[]
+  activities     Activity[]
+  communications Communication[]
+  interviews     Interview[]
+  offer          Offer?
+  bgv            Bgv?
+  joining        Joining?
+  billing        Billing?
+
+  @@index([email])
+  @@index([phone])
+  @@index([requirementId, stage])
+}
+
+model CandidateSource {
+  id          String      @id @default(cuid())
+  candidateId String
+  candidate   Candidate   @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  sourceId    String?
+  source      DataSource? @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  sourceName  String
+  externalId  String?
+  raw         Json?
+  createdAt   DateTime    @default(now())
+
+  @@unique([candidateId, sourceName])
+}
+
+model Activity {
+  id          String    @id @default(cuid())
+  candidateId String
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  type        String
+  message     String
+  userId      String?
+  createdAt   DateTime  @default(now())
+
+  @@index([candidateId])
+}
+
+model Communication {
+  id          String    @id @default(cuid())
+  candidateId String
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  channel     String
+  outcome     String
+  notes       String?
+  nextAction  String?
+  followUpAt  DateTime?
+  userId      String?
+  createdAt   DateTime  @default(now())
+}
+
+/// People who conduct interviews. Used by the scheduler for skill matching, load balancing and availability.
+model Interviewer {
+  id               String              @id @default(cuid())
+  userId           String?             @unique
+  user             User?               @relation(fields: [userId], references: [id])
+  name             String
+  email            String              @unique
+  title            String?
+  department       String?
+  skills           String[]
+  rounds           String[]
+  timezone         String              @default("Asia/Kolkata")
+  workStart        String              @default("10:00")
+  workEnd          String              @default("19:00")
+  workDays         Int[]               @default([1, 2, 3, 4, 5])
+  maxPerDay        Int                 @default(4)
+  maxPerWeek       Int                 @default(12)
+  bufferMins       Int                 @default(15)
+  calendarProvider CalendarProviderId  @default(NONE)
+  meetingProvider  MeetingProviderId   @default(TEAMS)
+  active           Boolean             @default(true)
+  createdAt        DateTime            @default(now())
+  panels           InterviewPanelist[]
+}
+
+model Interview {
+  id              String              @id @default(cuid())
+  candidateId     String
+  candidate       Candidate           @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  requirementId   String
+  requirement     Requirement         @relation(fields: [requirementId], references: [id])
+  round           String
+  startAt         DateTime
+  endAt           DateTime
+  timezone        String
+  provider        MeetingProviderId
+  status          InterviewStatus     @default(SCHEDULED)
+  joinUrl         String?
+  webLink         String?
+  meetingPassword String?
+  externalId      String?
+  location        String?
+  sequence        Int                 @default(0)
+  notes           String?
+  createdById     String?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  panel           InterviewPanelist[]
+
+  @@index([startAt])
+}
+
+model InterviewPanelist {
+  id             String      @id @default(cuid())
+  interviewId    String
+  interview      Interview   @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+  interviewerId  String
+  interviewer    Interviewer @relation(fields: [interviewerId], references: [id])
+  feedback       String?
+  ratings        Json?
+  recommendation String?
+  aiAnalysis     Json?
+  submittedAt    DateTime?
+
+  @@unique([interviewId, interviewerId])
+}
+
+model Offer {
+  id              String    @id @default(cuid())
+  candidateId     String    @unique
+  candidate       Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  finalCtc        Float?
+  status          String    @default("PREPARATION")
+  documents       String    @default("PENDING")
+  expectedJoining DateTime?
+  remarks         String?
+  updatedAt       DateTime  @updatedAt
+}
+
+model Bgv {
+  id          String    @id @default(cuid())
+  candidateId String    @unique
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  caseId      String?
+  provider    String?
+  initiatedAt DateTime?
+  status      String    @default("PENDING")
+  result      String?
+  remarks     String?
+  updatedAt   DateTime  @updatedAt
+}
+
+model Joining {
+  id           String    @id @default(cuid())
+  candidateId  String    @unique
+  candidate    Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  expectedDate DateTime?
+  actualDate   DateTime?
+  employeeId   String?
+  project      String?
+  location     String?
+  confirmed    Boolean   @default(false)
+  updatedAt    DateTime  @updatedAt
+}
+
+model Billing {
+  id          String    @id @default(cuid())
+  candidateId String    @unique
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  startDate   DateTime?
+  rate        Float?
+  status      String    @default("ELIGIBLE")
+  invoiceRef  String?
+  updatedAt   DateTime  @updatedAt
+}
+
+/// A configured candidate data source. New sources are rows here — no code change needed.
+model DataSource {
+  id                   String            @id @default(cuid())
+  name                 String            @unique
+  connector            String
+  template             String?
+  status               SourceStatus      @default(ACTIVE)
+  schedule             String?
+  config               Json              @default("{}")
+  secretEnc            String?
+  mapping              Json              @default("{}")
+  defaultRequirementId String?
+  lastSyncAt           DateTime?
+  lastCursor           String?
+  records              Int               @default(0)
+  lastError            String?
+  createdAt            DateTime          @default(now())
+  runs                 IngestionRun[]
+  candidates           CandidateSource[]
+}
+
+model IngestionRun {
+  id         String     @id @default(cuid())
+  sourceId   String
+  source     DataSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  startedAt  DateTime   @default(now())
+  finishedAt DateTime?
+  fetched    Int        @default(0)
+  added      Int        @default(0)
+  merged     Int        @default(0)
+  rejected   Int        @default(0)
+  error      String?
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  action    String
+  entity    String
+  entityId  String?
+  data      Json?
+  createdAt DateTime @default(now())
+
+  @@index([entity, entityId])
+}
+
+/// Admin-editable settings (e.g. AI provider and key), encrypted at rest. Overrides .env values.
+model Setting {
+  key       String   @id
+  valueEnc  String
+  updatedAt DateTime @updatedAt
+}
+
+/// Resumes and other files. driver "db" keeps bytes in Postgres (free); "s3" keeps them in S3/R2/MinIO (paid/scale).
+model StoredFile {
+  id        String   @id @default(cuid())
+  name      String
+  mime      String
+  size      Int
+  driver    String
+  key       String?
+  data      Bytes?
+  createdAt DateTime @default(now())
+}

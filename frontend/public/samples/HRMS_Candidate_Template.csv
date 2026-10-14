@@ -1,0 +1,4 @@
+﻿"Full Name","Email","Phone","Current Location","Total Experience (years)","Skills","Current Company","Current Title","Current CTC (LPA)","Expected CTC (LPA)","Notice Period (days)","Education","Requirement Code"
+"Ananya Rao","ananya.rao.sample@example.com","9876543210","Pune","4.5","Java, Spring Boot, SQL, Microservices","Persistent Systems","Software Engineer","12","16","30","B.E. Computer Engineering","R-1001"
+"Rahul Verma","rahul.verma.sample@example.com","+91 98220 12345","Mumbai","7","SAP FICO, S/4HANA, GL, AP/AR","Capgemini","SAP FICO Consultant","18","24","60","B.Com, CA Inter",""
+"Sara Khan","sara.khan.sample@example.com","9123456780","Hyderabad","3","React, TypeScript, Redux","Wipro","Frontend Developer","8","11","0","B.Tech IT",""

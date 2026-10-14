@@ -1,0 +1,11 @@
+{
+  "name": "hrms",
+  "private": true,
+  "scripts": {
+    "build": "npm --prefix frontend install --include=dev && npm --prefix frontend run build && npm --prefix backend install && npm --prefix backend run build",
+    "start": "npm --prefix backend run start:prod"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

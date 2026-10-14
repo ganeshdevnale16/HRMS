@@ -1,0 +1,20 @@
+# Free keep-alive + scheduler for the Render free plan.
+# Every 10 minutes: wakes the service (so it doesn't sleep) and runs due data-source syncs.
+# Setup: GitHub repo → Settings → Secrets and variables → Actions → add
+#   HRMS_URL     = https://your-api.onrender.com      (the Render URL, no trailing slash)
+#   CRON_SECRET  = same value as CRON_SECRET on Render
+# Note: GitHub may delay scheduled runs by several minutes at busy times. For a stricter keep-alive also add a free
+# UptimeRobot monitor on  https://your-api.onrender.com/api/health  every 5 minutes.
+name: hrms-cron
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wake service
+        run: curl -fsS --retry 3 --retry-delay 20 --max-time 90 "${{ secrets.HRMS_URL }}/api/health" || echo "still waking"
+      - name: Run due syncs
+        run: curl -fsS -X POST "${{ secrets.HRMS_URL }}/api/cron/run" -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" --max-time 120 || echo "sync call failed"

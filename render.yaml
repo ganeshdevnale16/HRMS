@@ -1,0 +1,49 @@
+# Render Blueprint: Dashboard → New → Blueprint → pick this repo.
+# FREE: one web service (API + website). Database is Neon (free), set DATABASE_URL by hand.
+# PAID: change plan to starter (no sleeping), then add the worker + Key Value (Redis) below and set REDIS_URL on both services.
+services:
+  - type: web
+    name: hrms
+    runtime: node
+    plan: free
+    buildCommand: npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      - key: SERVE_WEB
+        value: "true"
+      - key: DEFAULT_TIMEZONE
+        value: Asia/Kolkata
+      - key: JITSI_ENABLED
+        value: "true"
+      - key: PUBLIC_CAREERS
+        value: "false"
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CRON_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false
+      - key: ENCRYPTION_KEY
+        sync: false
+      - key: APP_URL
+        sync: false
+      # AI provider and key are set inside the app: Integrations → AI provider
+      # Email is set up inside the app: Integrations → Email → "Brevo API" (SMTP is blocked on Render's free plan)
+
+# ---- PAID upgrade: uncomment ----
+#  - type: worker
+#    name: hrms-worker
+#    runtime: node
+#    plan: starter
+#    buildCommand: npm --prefix backend install && npm --prefix backend run build
+#    startCommand: npm --prefix backend run start:worker
+#    # envVars: copy the same variables as the web service, plus REDIS_URL from hrms-redis
+#  - type: keyvalue
+#    name: hrms-redis
+#    plan: starter
+#    ipAllowList: []

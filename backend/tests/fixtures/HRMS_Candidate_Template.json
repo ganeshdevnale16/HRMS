@@ -1,0 +1,47 @@
+[
+ {
+  "Full Name": "Ananya Rao",
+  "Email": "ananya.rao.sample@example.com",
+  "Phone": "9876543210",
+  "Current Location": "Pune",
+  "Total Experience (years)": 4.5,
+  "Skills": "Java, Spring Boot, SQL, Microservices",
+  "Current Company": "Persistent Systems",
+  "Current Title": "Software Engineer",
+  "Current CTC (LPA)": 12,
+  "Expected CTC (LPA)": 16,
+  "Notice Period (days)": 30,
+  "Education": "B.E. Computer Engineering",
+  "Requirement Code": "R-1001"
+ },
+ {
+  "Full Name": "Rahul Verma",
+  "Email": "rahul.verma.sample@example.com",
+  "Phone": "+91 98220 12345",
+  "Current Location": "Mumbai",
+  "Total Experience (years)": 7,
+  "Skills": "SAP FICO, S/4HANA, GL, AP/AR",
+  "Current Company": "Capgemini",
+  "Current Title": "SAP FICO Consultant",
+  "Current CTC (LPA)": 18,
+  "Expected CTC (LPA)": 24,
+  "Notice Period (days)": 60,
+  "Education": "B.Com, CA Inter",
+  "Requirement Code": ""
+ },
+ {
+  "Full Name": "Sara Khan",
+  "Email": "sara.khan.sample@example.com",
+  "Phone": "9123456780",
+  "Current Location": "Hyderabad",
+  "Total Experience (years)": 3,
+  "Skills": "React, TypeScript, Redux",
+  "Current Company": "Wipro",
+  "Current Title": "Frontend Developer",
+  "Current CTC (LPA)": 8,
+  "Expected CTC (LPA)": 11,
+  "Notice Period (days)": 0,
+  "Education": "B.Tech IT",
+  "Requirement Code": ""
+ }
+]
