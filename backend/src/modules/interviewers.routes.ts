@@ -19,7 +19,7 @@ const Body = z.object({
   maxPerDay: z.coerce.number().int().min(1).max(12).default(4), maxPerWeek: z.coerce.number().int().min(1).max(50).default(12),
   bufferMins: z.coerce.number().int().min(0).max(120).default(15),
   calendarProvider: z.enum(['OUTLOOK', 'GOOGLE', 'NONE']).default('NONE'),
-  meetingProvider: z.enum(['TEAMS', 'ZOOM', 'GOOGLE_MEET', 'WEBEX', 'JITSI', 'IN_PERSON', 'PHONE']).default('TEAMS'),
+  meetingProvider: z.enum(['TEAMS', 'ZOOM', 'GOOGLE_MEET', 'WEBEX', 'JITSI', 'TEAMS_MANUAL', 'LINK', 'IN_PERSON', 'PHONE']).default('TEAMS'),
   active: z.boolean().default(true), userId: z.string().optional().nullable(),
 });
 

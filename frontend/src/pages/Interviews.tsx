@@ -4,6 +4,7 @@ import { api, fmtDT, human, PROVIDER_LABEL } from '../api';
 import { Empty, Page, useAction, useApi } from '../ui';
 import ScheduleInterview from '../components/ScheduleInterview';
 import { CancelModal, FeedbackModal, RescheduleModal } from '../components/InterviewActions';
+import MeetingLinkModal from '../components/MeetingLinkModal';
 
 export default function Interviews() {
   const [view, setView] = useState<'upcoming' | 'past' | 'all'>('upcoming');
@@ -35,6 +36,7 @@ export default function Interviews() {
             <td>{done}/{iv.panel.length}{iv.panel.filter((p: any) => p.recommendation).map((p: any) => <div key={p.id} className="sub">{p.interviewer.name.split(' ')[0]}: {p.recommendation}</div>)}</td>
             <td><div className="row" style={{ flexWrap: 'nowrap' }}>
               {iv.status !== 'CANCELLED' && new Date(iv.startAt) < new Date() && <button className="btn o sm" onClick={() => setModal({ kind: 'fb', iv })}>Feedback</button>}
+              {live && ['TEAMS_MANUAL', 'LINK'].includes(iv.provider) && <button className="btn o sm" onClick={() => setModal({ kind: 'link', iv })}>{iv.provider === 'TEAMS_MANUAL' ? 'Teams invite' : 'Link'}</button>}
               {live && <button className="btn o sm" onClick={() => setModal({ kind: 'rs', iv })}>Reschedule</button>}
               {live && <button className="btn danger sm" onClick={() => setModal({ kind: 'cx', iv })}>Cancel</button>}
             </div></td>
@@ -42,6 +44,7 @@ export default function Interviews() {
         }) : <tr><td colSpan={8}><Empty>No interviews here. Schedule one to get started.</Empty></td></tr>}
       </tbody></table></div></section>
       {modal?.kind === 'new' && <ScheduleInterview onClose={() => setModal(null)} onDone={reload} />}
+      {modal?.kind === 'link' && <MeetingLinkModal iv={modal.iv} onClose={() => setModal(null)} onDone={reload} />}
       {modal?.kind === 'rs' && <RescheduleModal iv={modal.iv} onClose={() => setModal(null)} onDone={reload} />}
       {modal?.kind === 'cx' && <CancelModal iv={modal.iv} onClose={() => setModal(null)} onDone={reload} />}
       {modal?.kind === 'fb' && <FeedbackModal iv={modal.iv} onClose={() => setModal(null)} onDone={reload} />}

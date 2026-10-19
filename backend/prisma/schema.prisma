@@ -51,6 +51,8 @@ enum MeetingProviderId {
   GOOGLE_MEET
   WEBEX
   JITSI
+  TEAMS_MANUAL
+  LINK
   IN_PERSON
   PHONE
 }

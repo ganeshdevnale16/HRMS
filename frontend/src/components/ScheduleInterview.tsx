@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api, ApiError, fmtDT, fmtTime, PROVIDER_LABEL, ROUNDS, toLocalInput } from '../api';
 import { Modal, useApi, useToast } from '../ui';
+import MeetingLinkModal from './MeetingLinkModal';
 
 /**
  * Four-step scheduler:
@@ -12,7 +13,7 @@ import { Modal, useApi, useToast } from '../ui';
 export default function ScheduleInterview({ candidateId, onClose, onDone }: { candidateId?: string; onClose: () => void; onDone: () => void }) {
   const toast = useToast();
   const [step, setStep] = useState(1);
-  const [f, setF] = useState<any>({ candidateId: candidateId ?? '', round: 'L1 Technical', durationMins: 60, provider: '', location: '', notes: '' });
+  const [f, setF] = useState<any>({ candidateId: candidateId ?? '', round: 'L1 Technical', durationMins: 60, provider: '', location: '', notes: '', meetingLink: '' });
   const [panel, setPanel] = useState<string[]>([]);
   const [slot, setSlot] = useState<string>('');
   const [manual, setManual] = useState('');
@@ -61,17 +62,18 @@ export default function ScheduleInterview({ candidateId, onClose, onDone }: { ca
   }, [slots]);
   const chosen = (suggestions ?? []).filter((s) => panel.includes(s.interviewer.id)).map((s) => s.interviewer);
 
+  if (done && done.interview.provider === 'TEAMS_MANUAL') return <MeetingLinkModal iv={done.interview} justScheduled onClose={onClose} onDone={onDone} />;
   if (done) return (
     <Modal title="Interview scheduled" onClose={onClose} footer={<button className="btn g" onClick={onClose}>Done</button>}>
       <p><b>{done.interview.round}</b> with <b>{done.interview.candidate.name}</b> on {fmtDT(done.interview.startAt)}.</p>
       <p>{PROVIDER_LABEL[done.interview.provider]}{done.interview.joinUrl && <> · <a href={done.interview.joinUrl} target="_blank" rel="noreferrer">Join link</a></>}</p>
-      <p className="small muted">{['TEAMS', 'GOOGLE_MEET', 'WEBEX'].includes(done.interview.provider) ? 'Calendar invites were sent by the meeting platform.' : 'Calendar invites (.ics) were emailed to the panel and the candidate.'}</p>
+      <p className="small muted">{['TEAMS', 'GOOGLE_MEET', 'WEBEX'].includes(done.interview.provider) ? 'Calendar invites were sent by the meeting platform.' : 'Calendar invites (.ics) were emailed to the panel and the candidate (if email is connected under Integrations).'}</p>
       {done.warnings?.map((w: string) => <div key={w} className="warn">{w}</div>)}
     </Modal>
   );
 
   const steps = ['Details', 'Interviewers', 'Time', 'Confirm'];
-  const canNext = step === 1 ? !!(f.candidateId && cand?.requirementId && f.provider) : step === 2 ? panel.length > 0 : step === 3 ? !!start : true;
+  const canNext = step === 1 ? !!(f.candidateId && cand?.requirementId && f.provider && (f.provider !== 'LINK' || /^https:\/\/\S+$/.test(f.meetingLink.trim()))) : step === 2 ? panel.length > 0 : step === 3 ? !!start : true;
   return (
     <Modal wide title="Schedule interview" onClose={onClose} footer={<>
       {step > 1 && <button className="btn o" onClick={() => setStep(step - 1)}>Back</button>}
@@ -91,8 +93,10 @@ export default function ScheduleInterview({ candidateId, onClose, onDone }: { ca
         <div><h3>Meeting platform</h3>
           <div className="opt">{integ?.meeting.map((m: any) => (
             <button key={m.id} aria-pressed={f.provider === m.id} disabled={!m.configured} onClick={() => setF({ ...f, provider: m.id })}>
-              <b>{m.label}</b><span>{m.configured ? (['TEAMS', 'GOOGLE_MEET', 'WEBEX'].includes(m.id) ? 'Link created, platform sends invites' : ['ZOOM', 'JITSI'].includes(m.id) ? 'Link created, we email invites' : 'We email the invite') : 'Not connected — see Integrations'}</span></button>))}
+              <b>{m.label}</b><span>{m.configured ? (['TEAMS', 'GOOGLE_MEET', 'WEBEX'].includes(m.id) ? 'Link created, platform sends invites' : ['ZOOM', 'JITSI'].includes(m.id) ? 'Link created, we email invites' : m.id === 'TEAMS_MANUAL' ? 'No admin setup — opens your Teams pre-filled, you click Send' : m.id === 'LINK' ? 'Paste any Teams/Zoom/Meet link — we email the invite' : 'We email the invite') : 'Not connected — see Integrations'}</span></button>))}
           </div></div>
+        {f.provider === 'LINK' && <label className="f">Meeting link (Teams, Zoom, Google Meet…)<input value={f.meetingLink} onChange={(e) => setF({ ...f, meetingLink: e.target.value })} placeholder="https://teams.microsoft.com/l/meetup-join/…" /></label>}
+        {f.provider === 'TEAMS_MANUAL' && <div className="ai small">After booking, HRMS opens <b>your</b> Teams/Outlook with everything filled in — you just click <b>Send</b>. Works without any Microsoft admin setup.</div>}
         {f.provider === 'IN_PERSON' && <label className="f">Venue<input value={f.location} onChange={(e) => setF({ ...f, location: e.target.value })} placeholder="Office, floor, meeting room" /></label>}
         <label className="f">Note for the panel and candidate (optional)<textarea rows={2} value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} /></label>
       </div>}

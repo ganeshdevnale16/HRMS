@@ -29,6 +29,14 @@ emailRoutes.post('/preview', ah(async (req, res) => {
   res.json({ to: v.email, subject: render(b.subject, v.vars), body: render(b.body, v.vars) });
 }));
 
+/** Records an email the recruiter sent from their own Outlook/Gmail (opened from HRMS), so history stays complete. */
+emailRoutes.post('/log', requireRole('RECRUITER'), ah(async (req, res) => {
+  const b = z.object({ candidateId: z.string(), subject: z.string().max(300), body: z.string().max(20000), via: z.string().max(40).default('Outlook') }).parse(req.body);
+  await prisma.communication.create({ data: { candidateId: b.candidateId, channel: 'EMAIL', outcome: `Sent from ${b.via}`, notes: `Subject: ${b.subject}\n\n${b.body}`.slice(0, 5000), userId: req.user!.id } });
+  await activity(b.candidateId, 'communication', `Email sent from ${b.via}: ${b.subject}`, req.user!.id);
+  res.json({ ok: true });
+}));
+
 /** Sends one personalised email per candidate (never one email to many people). Max 100 per request. */
 emailRoutes.post('/send', requireRole('RECRUITER'), ah(async (req, res) => {
   const b = z.object({ candidateIds: z.array(z.string()).min(1).max(100), subject: z.string().min(1, 'Add a subject').max(200), body: z.string().min(1, 'Write a message').max(20000), template: z.string().optional() }).parse(req.body);

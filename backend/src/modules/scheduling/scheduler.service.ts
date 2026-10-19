@@ -81,7 +81,7 @@ export async function findSlots(o: { interviewerIds: string[]; durationMins: num
 
 export interface ScheduleInput {
   candidateId: string; round: string; interviewerIds: string[]; start: Date; durationMins: number;
-  provider: MeetingProviderId; location?: string; notes?: string; force?: boolean; timezone?: string;
+  provider: MeetingProviderId; location?: string; notes?: string; force?: boolean; timezone?: string; meetingLink?: string;
 }
 
 async function loadContext(candidateId: string, interviewerIds: string[]) {
@@ -92,13 +92,13 @@ async function loadContext(candidateId: string, interviewerIds: string[]) {
   return { candidate, requirement: candidate.requirement, ivs };
 }
 
-function buildRequest(ctx: Awaited<ReturnType<typeof loadContext>>, i: { id: string; round: string; start: Date; end: Date; timezone: string; location?: string | null; notes?: string | null }): MeetingRequest {
+function buildRequest(ctx: Awaited<ReturnType<typeof loadContext>>, i: { id: string; round: string; start: Date; end: Date; timezone: string; location?: string | null; notes?: string | null; meetingLink?: string | null }): MeetingRequest {
   const { candidate: c, requirement: r, ivs } = ctx;
   const when = DateTime.fromJSDate(i.start, { zone: i.timezone }).toFormat("ccc d LLL yyyy, h:mm a ZZZZ");
   return {
     subject: `Interview: ${c.name} – ${r.position} (${i.round})`,
     bodyHtml: `<p><b>${i.round}</b> for <b>${r.position}</b> (${r.code}).</p><p>Candidate: ${c.name}${c.title ? `, ${c.title}` : ''}${c.company ? ` at ${c.company}` : ''}<br>When: ${when}<br>Panel: ${ivs.map((x) => x.name).join(', ')}</p>${i.location ? `<p>Location: ${i.location}</p>` : ''}${i.notes ? `<p>${i.notes}</p>` : ''}<p>Interviewers: submit feedback in HRMS after the interview: ${env.APP_URL}/interviews/${i.id}</p>`,
-    start: i.start, end: i.end, timezone: i.timezone, idempotencyKey: i.id, location: i.location ?? undefined,
+    start: i.start, end: i.end, timezone: i.timezone, idempotencyKey: i.id, location: i.location ?? undefined, meetingLink: i.meetingLink ?? null,
     attendees: [
       ...ivs.map((x) => ({ email: x.email, name: x.name, role: 'interviewer' as const })),
       ...(c.email ? [{ email: c.email, name: c.name, role: 'candidate' as const }] : []),
@@ -129,6 +129,8 @@ export async function scheduleInterview(input: ScheduleInput, userId?: string) {
   if (problems.length && !input.force) throw new HttpError(409, 'This time does not work for the panel', { problems, warnings });
 
   const provider = getProvider(input.provider);
+  if (input.meetingLink && !/^https:\/\/\S+$/i.test(input.meetingLink.trim())) throw new HttpError(400, 'The meeting link must start with https://');
+  if (input.provider === 'LINK' && !input.meetingLink) throw new HttpError(400, 'Paste the meeting link (Teams, Zoom, Google Meet…)');
   const row = await prisma.interview.create({
     data: {
       candidateId: ctx.candidate.id, requirementId: ctx.requirement.id, round: input.round, startAt: start, endAt: end, timezone,
@@ -136,7 +138,7 @@ export async function scheduleInterview(input: ScheduleInput, userId?: string) {
       panel: { create: ctx.ivs.map((i) => ({ interviewerId: i.id })) },
     },
   });
-  const mreq = buildRequest(ctx, { ...row });
+  const mreq = buildRequest(ctx, { ...row, meetingLink: input.meetingLink?.trim() || null });
   let result;
   try { result = await provider.create(mreq); }
   catch (e: any) { await prisma.interview.delete({ where: { id: row.id } }); throw new HttpError(502, `Could not create the ${provider.label} meeting: ${e.message}`); }
@@ -164,7 +166,7 @@ export async function rescheduleInterview(id: string, start: Date, durationMins:
   const problems = checkSlot(ctx.ivs, busy, start, end);
   if (problems.length && !force) throw new HttpError(409, 'This time does not work for the panel', { problems });
 
-  const mreq = buildRequest(ctx, { ...iv, start, end });
+  const mreq = buildRequest(ctx, { ...iv, start, end, meetingLink: iv.joinUrl });
   const provider = meetingProviders[iv.provider];
   let result = { joinUrl: iv.joinUrl, webLink: iv.webLink, sendsInvites: false } as any;
   if (iv.externalId) result = await provider.update(iv.externalId, mreq);
@@ -185,10 +187,24 @@ export async function cancelInterview(id: string, reason: string | undefined, us
   const provider = meetingProviders[iv.provider];
   if (iv.externalId) await provider.cancel(iv.externalId, reason).catch((e) => console.warn('provider cancel failed', e.message));
   const mreq = buildRequest(ctx, { ...iv, start: iv.startAt, end: iv.endAt });
-  if (!['TEAMS', 'GOOGLE_MEET', 'WEBEX'].includes(iv.provider)) await emailIcs(mreq, id, iv.sequence + 1, 'CANCEL');
+  // TEAMS_MANUAL: the real meeting lives in the recruiter's own Teams — they cancel it there (the UI reminds them).
+  if (!['TEAMS', 'GOOGLE_MEET', 'WEBEX', 'TEAMS_MANUAL'].includes(iv.provider)) await emailIcs(mreq, id, iv.sequence + 1, 'CANCEL');
   const saved = await prisma.interview.update({ where: { id }, data: { status: 'CANCELLED', sequence: { increment: 1 }, notes: reason ? `${iv.notes ?? ''}\nCancelled: ${reason}`.trim() : iv.notes } });
   await activity(iv.candidateId, 'interview', `${iv.round} cancelled${reason ? `: ${reason}` : ''}`, userId);
   await audit(userId, 'interview.cancel', 'Interview', id, { reason });
+  return saved;
+}
+
+/** Save a meeting link created outside HRMS (e.g. the Teams link from the recruiter's own invite). Optionally email it. */
+export async function setMeetingLink(id: string, url: string | null, notify: boolean, userId?: string) {
+  if (url && !/^https:\/\/\S+$/i.test(url.trim())) throw new HttpError(400, 'The meeting link must start with https://');
+  const iv = await prisma.interview.findUniqueOrThrow({ where: { id }, include: { panel: true } });
+  const saved = await prisma.interview.update({ where: { id }, data: { joinUrl: url?.trim() || null, webLink: url?.trim() || null, ...(notify ? { sequence: { increment: 1 } } : {}) } });
+  if (notify && url) {
+    const ctx = await loadContext(iv.candidateId, iv.panel.map((p) => p.interviewerId));
+    await emailIcs(buildRequest(ctx, { ...iv, start: iv.startAt, end: iv.endAt, meetingLink: url }), id, saved.sequence, 'REQUEST', url);
+  }
+  await activity(iv.candidateId, 'interview', `${iv.round}: meeting link ${url ? 'added' : 'removed'}${notify && url ? ' and emailed to attendees' : ''}`, userId);
   return saved;
 }
 

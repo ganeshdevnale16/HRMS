@@ -13,6 +13,8 @@ import { buildIcs } from '../src/lib/ics.js';
 import { callProvider, parseJsonLoose, parseAzure } from '../src/modules/ai/providers.js';
 import { merge, resolve, fromLegacy } from '../src/modules/ai/settings.js';
 import { render, textToHtml, BUILT_IN_TEMPLATES } from '../src/lib/template.js';
+import { teamsManual, linkProvider } from '../src/modules/scheduling/providers/manual.js';
+import { teamsMeetingLink, outlookEventLink, outlookMailLink, mailtoLink, interviewDraft } from '../../frontend/src/lib/deeplinks.js';
 
 const dir = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures');
 let pass = 0, fail = 0, skip = 0;
@@ -117,6 +119,27 @@ function emailTemplates() {
   ok('unknown placeholder left visible', render('Hi {{nickname}}', v) === 'Hi {{nickname}}');
   const html = textToHtml('Hi <b>Priya</b>,\n\nJoin: https://meet.jit.si/HRMS-1\nThanks');
   ok('HTML is escaped, paragraphs and links made', html.includes('&lt;b&gt;Priya&lt;/b&gt;') && html.includes('<a href="https://meet.jit.si/HRMS-1">') && (html.match(/<p /g) ?? []).length === 2, html);
+}
+
+async function noAdminTeams() {
+  section('Teams / Outlook without admin setup');
+  const iv = { round: 'L1 Technical', startAt: '2026-10-20T05:30:00.000Z', endAt: '2026-10-20T06:30:00.000Z', candidate: { name: 'Priya Shah', email: 'priya@example.com' },
+    requirement: { position: 'Java Developer', code: 'R-1001' }, panel: [{ interviewer: { name: 'Rajesh Iyer', email: 'rajesh@corp.com' } }, { interviewer: { name: 'Farah Khan', email: 'farah@corp.com' } }] };
+  const d = interviewDraft(iv);
+  ok('draft: subject, both interviewers + candidate invited', d.subject === 'Interview: Priya Shah – Java Developer (L1 Technical)' && d.attendees.join(',') === 'rajesh@corp.com,farah@corp.com,priya@example.com', d);
+  const t = new URL(teamsMeetingLink(d));
+  ok('Teams link: meeting/new with subject, ISO times, attendees, details', t.origin + t.pathname === 'https://teams.microsoft.com/l/meeting/new' && t.searchParams.get('subject') === d.subject && t.searchParams.get('startTime') === '2026-10-20T05:30:00.000Z' && t.searchParams.get('attendees') === 'rajesh@corp.com,farah@corp.com,priya@example.com' && !!t.searchParams.get('content')?.includes('Panel: Rajesh Iyer, Farah Khan'), t.href);
+  const o = new URL(outlookEventLink(d));
+  ok('Outlook web event link with to/startdt/enddt', o.hostname === 'outlook.office.com' && o.searchParams.get('to') === 'rajesh@corp.com,farah@corp.com,priya@example.com' && o.searchParams.get('enddt') === '2026-10-20T06:30:00.000Z', o.href);
+  const m = new URL(outlookMailLink(['priya@example.com'], 'Hi & welcome', 'Line 1\nLine 2'));
+  ok('Outlook mail link keeps special characters and line breaks', m.searchParams.get('subject') === 'Hi & welcome' && m.searchParams.get('body') === 'Line 1\nLine 2', m.href);
+  ok('mailto link', mailtoLink(['priya@example.com'], 'Hi', 'B').startsWith('mailto:priya%40example.com?subject=Hi'));
+  const r = await teamsManual.create({ subject: 's', bodyHtml: '', start: new Date(), end: new Date(), timezone: 'Asia/Kolkata', attendees: [], idempotencyKey: 'x' });
+  ok('"Teams from my Outlook": HRMS does not send its own invite (you send from Teams)', r.sendsInvites === true && r.externalId === null);
+  const l = await linkProvider.create({ subject: 's', bodyHtml: '', start: new Date(), end: new Date(), timezone: 'Asia/Kolkata', attendees: [], idempotencyKey: 'x', meetingLink: 'https://teams.microsoft.com/l/meetup-join/abc' });
+  ok('"Own meeting link": link stored, HRMS emails the .ics invite', l.joinUrl === 'https://teams.microsoft.com/l/meetup-join/abc' && l.sendsInvites === false);
+  try { await linkProvider.create({ subject: 's', bodyHtml: '', start: new Date(), end: new Date(), timezone: 'Asia/Kolkata', attendees: [], idempotencyKey: 'x' }); ok('missing link refused', false); }
+  catch (e: any) { ok('missing link → clear message', /Paste the meeting link/.test(e.message), e.message); }
 }
 
 function scoring() {
@@ -244,6 +267,7 @@ aiRouting();
 await template();
 await spreadsheet();
 emailTemplates();
+await noAdminTeams();
 scoring();
 invites();
 console.log(`\n${pass} passed, ${fail} failed${skip ? `, ${skip} skipped` : ''}`);

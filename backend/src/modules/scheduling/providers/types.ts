@@ -12,6 +12,8 @@ export interface MeetingRequest {
   /** Stable key so a retried request does not create a second meeting. */
   idempotencyKey: string;
   location?: string;
+  /** Link the recruiter pasted (Teams/Zoom/Meet created in their own app). */
+  meetingLink?: string | null;
 }
 
 export interface MeetingResult {

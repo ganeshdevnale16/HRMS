@@ -5,7 +5,7 @@ import { ah, HttpError } from '../middleware/http.js';
 import { requireRole } from '../middleware/auth.js';
 import { activity, audit } from '../lib/audit.js';
 import { ai } from './ai/ai.service.js';
-import { cancelInterview, findSlots, rescheduleInterview, scheduleInterview } from './scheduling/scheduler.service.js';
+import { cancelInterview, findSlots, rescheduleInterview, scheduleInterview, setMeetingLink } from './scheduling/scheduler.service.js';
 
 export const interviewRoutes = Router();
 const include = { candidate: { select: { id: true, name: true, email: true } }, requirement: { select: { id: true, code: true, client: true, position: true, skills: true } }, panel: { include: { interviewer: { select: { id: true, name: true, email: true } } } } };
@@ -37,8 +37,8 @@ interviewRoutes.post('/slots', requireRole('RECRUITER'), ah(async (req, res) => 
 interviewRoutes.post('/', requireRole('RECRUITER'), ah(async (req, res) => {
   const b = z.object({
     candidateId: z.string(), round: z.string().min(1), interviewerIds: z.array(z.string()).min(1).max(6), start: z.coerce.date(),
-    durationMins: z.coerce.number().int().min(15).max(240), provider: z.enum(['TEAMS', 'ZOOM', 'GOOGLE_MEET', 'WEBEX', 'JITSI', 'IN_PERSON', 'PHONE']),
-    location: z.string().optional(), notes: z.string().optional(), force: z.boolean().optional(), timezone: z.string().optional(),
+    durationMins: z.coerce.number().int().min(15).max(240), provider: z.enum(['TEAMS', 'ZOOM', 'GOOGLE_MEET', 'WEBEX', 'JITSI', 'TEAMS_MANUAL', 'LINK', 'IN_PERSON', 'PHONE']),
+    location: z.string().optional(), notes: z.string().optional(), force: z.boolean().optional(), timezone: z.string().optional(), meetingLink: z.string().optional(),
   }).parse(req.body);
   res.status(201).json(await scheduleInterview(b, req.user!.id));
 }));
@@ -46,6 +46,11 @@ interviewRoutes.post('/', requireRole('RECRUITER'), ah(async (req, res) => {
 interviewRoutes.post('/:id/reschedule', requireRole('RECRUITER'), ah(async (req, res) => {
   const b = z.object({ start: z.coerce.date(), durationMins: z.coerce.number().int().min(15).max(240), force: z.boolean().optional() }).parse(req.body);
   res.json(await rescheduleInterview(req.params.id, b.start, b.durationMins, b.force, req.user!.id));
+}));
+
+interviewRoutes.post('/:id/link', requireRole('RECRUITER'), ah(async (req, res) => {
+  const b = z.object({ url: z.string().nullable(), notify: z.boolean().default(false) }).parse(req.body);
+  res.json(await setMeetingLink(req.params.id, b.url, b.notify, req.user!.id));
 }));
 
 interviewRoutes.post('/:id/cancel', requireRole('RECRUITER'), ah(async (req, res) => {

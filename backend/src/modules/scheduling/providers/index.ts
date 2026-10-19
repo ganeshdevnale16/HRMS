@@ -5,12 +5,13 @@ import { googleMeet } from './googleMeet.js';
 import { webex } from './webex.js';
 import { inPerson, phone } from './offline.js';
 import { jitsi } from './jitsi.js';
+import { teamsManual, linkProvider } from './manual.js';
 import type { MeetingProvider } from './types.js';
 import { HttpError } from '../../../middleware/http.js';
 
 /** Register a new meeting platform by adding it here. */
 export const meetingProviders: Record<MeetingProviderId, MeetingProvider> = {
-  TEAMS: teams, ZOOM: zoomProvider, GOOGLE_MEET: googleMeet, WEBEX: webex, JITSI: jitsi, IN_PERSON: inPerson, PHONE: phone,
+  TEAMS: teams, ZOOM: zoomProvider, GOOGLE_MEET: googleMeet, WEBEX: webex, JITSI: jitsi, TEAMS_MANUAL: teamsManual, LINK: linkProvider, IN_PERSON: inPerson, PHONE: phone,
 };
 
 export function getProvider(id: MeetingProviderId) {

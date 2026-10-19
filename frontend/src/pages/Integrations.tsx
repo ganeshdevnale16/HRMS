@@ -8,6 +8,8 @@ const SETUP: Record<string, string> = {
   GOOGLE_MEET: 'Google Workspace service account with domain-wide delegation for the calendar scope. Set GOOGLE_SA_EMAIL, GOOGLE_SA_PRIVATE_KEY, GOOGLE_ORGANIZER_EMAIL.',
   WEBEX: 'Webex service app or integration token with meeting scopes. Set WEBEX_ACCESS_TOKEN.',
   JITSI: 'Free video meetings, no account or keys. HRMS creates a private room link and emails invites. Set JITSI_ENABLED=false to hide it.',
+  TEAMS_MANUAL: 'No admin setup. HRMS books the slot and opens your own Teams or Outlook pre-filled; you click Send. Use this when you cannot register an app in Microsoft Entra.',
+  LINK: 'No setup. Paste a Teams, Zoom or Meet link you created yourself; HRMS emails the calendar invite (needs Email connected).',
   IN_PERSON: 'Always available. Invites are emailed as calendar files.',
   PHONE: 'Always available. Invites are emailed as calendar files.',
   OUTLOOK: 'Uses the same Microsoft app as Teams to read interviewers’ free/busy time.',
@@ -15,10 +17,10 @@ const SETUP: Record<string, string> = {
 };
 
 const HELP: Record<string, { key: string; note?: string; link?: string }> = {
-  openai: { key: 'platform.openai.com → API keys', link: 'https://platform.openai.com/api-keys', note: 'Change the base URL to use any OpenAI-compatible service (Groq, OpenRouter, Together, Ollama).' },
+  openai: { key: 'platform.openai.com → API keys', link: 'https://platform.openai.com/api-keys', note: 'Only for keys from platform.openai.com (or Groq/OpenRouter via base URL). Keys from Microsoft Foundry / Azure go in the Azure OpenAI card.' },
   anthropic: { key: 'console.anthropic.com → API keys', link: 'https://console.anthropic.com/settings/keys' },
   gemini: { key: 'aistudio.google.com → Get API key (free tier)', link: 'https://aistudio.google.com/apikey', note: 'On the free tier Google may use your data to improve its products — test data only.' },
-  azure: { key: 'Azure portal → your Azure OpenAI resource → Keys and Endpoint', link: 'https://portal.azure.com/#view/Microsoft_Azure_ProjectOxford/CognitiveServicesHub/~/OpenAI', note: 'Best for enterprise data residency (choose an India region).' },
+  azure: { key: 'Microsoft Foundry (ai.azure.com) → your deployment → Key + Endpoint / Target URI', link: 'https://ai.azure.com', note: 'Works with GPT-4o, GPT-4.1, GPT-5 and o-series deployments. Choose an India region for data residency.' },
 };
 
 function ProviderCard({ p, onSaved }: { p: any; onSaved: () => void }) {
@@ -42,9 +44,11 @@ function ProviderCard({ p, onSaved }: { p: any; onSaved: () => void }) {
       <label className="f">API key{p.connected ? ' (blank = keep saved key)' : ''}<input type="password" autoComplete="off" value={f.apiKey} onChange={set('apiKey')} placeholder={p.connected ? p.keyHint : 'Paste key'} /></label>
       {p.id !== 'azure' && <label className="f">Model<input value={f.model} onChange={set('model')} placeholder={p.defaultModel} /></label>}
       {p.id === 'openai' && <label className="f full">Base URL (only for OpenAI-compatible services)<input value={f.baseUrl} onChange={set('baseUrl')} placeholder="https://api.openai.com/v1  ·  Groq: https://api.groq.com/openai/v1" /></label>}
-      {p.id === 'azure' && <><label className="f">Endpoint<input value={f.azureEndpoint} onChange={set('azureEndpoint')} placeholder="https://your-resource.openai.azure.com" /></label>
-        <label className="f">Deployment name<input value={f.azureDeployment} onChange={set('azureDeployment')} placeholder="gpt-4o" /></label>
-        <label className="f">API version<input value={f.azureApiVersion} onChange={set('azureApiVersion')} placeholder="2024-10-21" /></label></>}
+      {p.id === 'azure' && <>
+        <div className="ai full small"><b>From Microsoft Foundry (ai.azure.com):</b> open your project → <b>Models + endpoints</b> (Deployments) → click your deployment. Copy the <b>Key</b>, and paste the <b>Endpoint</b> or the full <b>Target URI</b> below — HRMS reads the deployment name and API version from the Target URI automatically. Key and endpoint must come from the <b>same</b> resource. <Ext href="https://learn.microsoft.com/azure/ai-foundry/openai/quickstart">Microsoft guide</Ext></div>
+        <label className="f full">Endpoint or Target URI<input value={f.azureEndpoint} onChange={set('azureEndpoint')} placeholder="https://your-resource.openai.azure.com   or   …/openai/deployments/gpt-4o-mini/chat/completions?api-version=…" /></label>
+        <label className="f">Deployment name (not the model name, if you renamed it)<input value={f.azureDeployment} onChange={set('azureDeployment')} placeholder="read from Target URI, or e.g. gpt-4o-mini" /></label>
+        <label className="f">API version (optional)<input value={f.azureApiVersion} onChange={set('azureApiVersion')} placeholder="leave blank — HRMS picks it" /></label></>}
       {HELP[p.id].note && <p className="small muted full" style={{ margin: 0 }}>{HELP[p.id].note}</p>}
       <div className="row full" style={{ justifyContent: 'flex-end' }}>
         <button className="btn o sm" disabled={busy} onClick={async () => { const r = await run(() => api('/settings/ai/test', { body: { provider: p.id, ...body() } })); if (r) setMsg({ ok: r.ok, text: r.message }); }}>Test before saving</button>

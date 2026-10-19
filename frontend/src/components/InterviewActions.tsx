@@ -13,7 +13,7 @@ export function RescheduleModal({ iv, onClose, onDone }: { iv: any; onClose: () 
     catch (e: any) { if (e.status === 409) setProblems(e.details?.problems ?? [e.message]); else await run(() => Promise.reject(e)); }
   }
   return <Modal title={`Reschedule ${iv.round}`} onClose={onClose} footer={<><button className="btn o" onClick={onClose}>Cancel</button><button className="btn g" disabled={busy} onClick={() => go()}>Reschedule and notify</button></>}>
-    <p className="small muted" style={{ marginTop: 0 }}>Currently {fmtDT(iv.startAt)}. The meeting is updated on the platform and everyone gets the new time.</p>
+    <p className="small muted" style={{ marginTop: 0 }}>Currently {fmtDT(iv.startAt)}. {iv.provider === 'TEAMS_MANUAL' ? <b>This Teams meeting was sent from your own Outlook — after saving here, also move it in Outlook/Teams so attendees get the new time.</b> : 'The meeting is updated on the platform and everyone gets the new time.'}</p>
     <label className="f" style={{ maxWidth: 280 }}>New time<input type="datetime-local" value={start} onChange={(e) => setStart(e.target.value)} /></label>
     {problems && <div className="error">{problems.join('; ')}<div><button className="btn danger sm" style={{ marginTop: 6 }} onClick={() => go(true)}>Reschedule anyway</button></div></div>}
   </Modal>;
@@ -23,6 +23,7 @@ export function CancelModal({ iv, onClose, onDone }: { iv: any; onClose: () => v
   const [reason, setReason] = useState('');
   const { run, busy } = useAction();
   return <Modal title={`Cancel ${iv.round}`} onClose={onClose} footer={<><button className="btn o" onClick={onClose}>Keep interview</button><button className="btn danger" disabled={busy} onClick={async () => { if (await run(() => api(`/interviews/${iv.id}/cancel`, { body: { reason } }), 'Interview cancelled; attendees notified')) { onDone(); onClose(); } }}>Cancel interview</button></>}>
+    {iv.provider === 'TEAMS_MANUAL' && <div className="warn">This Teams meeting was sent from your own Outlook. After cancelling here, also <b>cancel it in Outlook/Teams</b> so attendees are notified.</div>}
     <label className="f">Reason (shared with attendees)<textarea rows={3} value={reason} onChange={(e) => setReason(e.target.value)} /></label>
   </Modal>;
 }

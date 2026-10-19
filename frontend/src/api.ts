@@ -43,7 +43,7 @@ export async function downloadFile(path: string, fallbackName: string) {
 
 export const STAGES = ['SOURCED', 'SCREENING', 'COMMUNICATION', 'INTERVIEW', 'SELECTION', 'HIRING', 'BGV', 'JOINING', 'BILLING'] as const;
 export const ROUNDS = ['L1 Technical', 'L2 Technical', 'Managerial', 'Client round', 'HR'];
-export const PROVIDER_LABEL: Record<string, string> = { TEAMS: 'Microsoft Teams', ZOOM: 'Zoom', GOOGLE_MEET: 'Google Meet', WEBEX: 'Cisco Webex', JITSI: 'Jitsi Meet (free)', IN_PERSON: 'In person', PHONE: 'Phone call' };
+export const PROVIDER_LABEL: Record<string, string> = { TEAMS: 'Microsoft Teams', ZOOM: 'Zoom', GOOGLE_MEET: 'Google Meet', WEBEX: 'Cisco Webex', TEAMS_MANUAL: 'Teams (from my Outlook)', LINK: 'Own meeting link', JITSI: 'Jitsi Meet (free)', IN_PERSON: 'In person', PHONE: 'Phone call' };
 export const human = (s?: string | null) => (s ? s.charAt(0) + s.slice(1).toLowerCase().replace(/_/g, ' ') : '—');
 export const fmtDate = (d?: string | null) => (d ? new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—');
 export const fmtDT = (d?: string | null) => (d ? new Date(d).toLocaleString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }) : '—');
